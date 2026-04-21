@@ -1,0 +1,25 @@
+# 1) Initialize Waydroid
+sudo waydroid init
+
+# 2) Set the correct DRM device for RK3588 / Panthor
+sudo cp /var/lib/waydroid/waydroid.cfg /var/lib/waydroid/waydroid.cfg.bak.$(date +%F-%H%M%S)
+sudo sed -i 's|^drm_device[[:space:]]*=.*|drm_device = /dev/dri/renderD130|' /var/lib/waydroid/waydroid.cfg
+
+# 3) Regenerate Waydroid config files from the updated base config
+sudo waydroid upgrade --offline
+
+# 4) Align the generated files with the same render node
+sudo cp /var/lib/waydroid/lxc/waydroid/config_nodes /var/lib/waydroid/lxc/waydroid/config_nodes.bak.$(date +%F-%H%M%S)
+sudo cp /var/lib/waydroid/waydroid_base.prop /var/lib/waydroid/waydroid_base.prop.bak.$(date +%F-%H%M%S)
+
+sudo sed -i 's|/dev/dri/renderD128|/dev/dri/renderD130|g' /var/lib/waydroid/lxc/waydroid/config_nodes
+sudo sed -i 's|gralloc.gbm.device=/dev/dri/renderD128|gralloc.gbm.device=/dev/dri/renderD130|g' /var/lib/waydroid/waydroid_base.prop
+
+# 5) Restart cleanly
+sudo systemctl restart waydroid-container
+nohup waydroid session start >/tmp/waydroid-session.log 2>&1 &
+
+# 6) Verify
+sleep 6
+waydroid status
+sudo waydroid shell -- dumpsys SurfaceFlinger | grep -i GLES
