@@ -43,12 +43,13 @@ make
 sudo cp -r /tmp/aic8800d80-bt/fw/aic8800D80 /lib/firmware/
 
 # Create symlink so driver finds firmware at expected path
+sudo mkdir -p /lib/firmware/aic8800_fw/USB
 sudo ln -sf /lib/firmware/aic8800D80 /lib/firmware/aic8800_fw/USB/aic8800D80 2>/dev/null || true
 
 # Install udev rules
 sudo cp /tmp/aic8800d80-bt/aic.rules /lib/udev/rules.d/
 
-# Install kernel modules manually
+# Install kernel modules
 sudo mkdir -p /lib/modules/$(uname -r)/updates/dkms
 sudo cp /tmp/aic8800d80-bt/drivers/aic8800/aic_load_fw/aic_load_fw.ko \
   /lib/modules/$(uname -r)/updates/dkms/aic_load_fw_usb.ko
@@ -64,14 +65,13 @@ sudo depmod -a
 ```bash
 sudo tee /usr/local/bin/aic8800-init.sh << 'EOF'
 #!/bin/bash
-sleep 5
+sleep 2
 if lsusb | grep -q "a69c:5721"; then
     usb_modeswitch -v 0xa69c -p 0x5721 -KQ
-    sleep 6
+    sleep 4
 fi
 modprobe aic_load_fw_usb
 modprobe aic8800_fdrv_usb
-sleep 2
 echo "368b 8d81" > /sys/bus/usb/drivers/aic8800_fdrv/new_id 2>/dev/null || true
 EOF
 sudo chmod +x /usr/local/bin/aic8800-init.sh
@@ -87,12 +87,13 @@ sudo tee /etc/systemd/system/aic8800.service << 'EOF'
 Description=AIC8800 WiFi/BT init
 After=network-pre.target
 Wants=network-pre.target
+DefaultDependencies=no
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/local/bin/aic8800-init.sh
-TimeoutStartSec=60
+TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target
@@ -127,16 +128,22 @@ sudo depmod -a
 ### Step 7: Boot Time Optimization
 
 ```bash
-# Disable systemd-rfkill (saves ~11s)
+# systemd-rfkill (saves ~11s)
 sudo systemctl mask systemd-rfkill.service
 sudo systemctl mask systemd-rfkill.socket
 
-# Disable NetworkManager-wait-online (not needed for desktop)
+# NetworkManager-wait-online (not needed for desktop)
 sudo systemctl mask NetworkManager-wait-online.service
 
-# Disable unused services
+# Plymouth boot splash (saves ~165ms)
+sudo systemctl mask plymouth-start.service
+sudo systemctl mask plymouth-quit-wait.service
+
+# Unused services
 sudo systemctl disable rpcbind.service
 sudo systemctl mask rpc-statd-notify.service
+sudo systemctl disable packagekit.service
+sudo systemctl disable geoclue.service
 
 sudo systemctl daemon-reload
 ```
@@ -168,7 +175,10 @@ bluetoothctl show
 - WiFi: `wlx...` interface appears, connects to SSID, ping succeeds
 - BT: `hciconfig` shows `UP RUNNING` with a real MAC address, `bluetoothctl show` shows controller
 
+---
+
 **If kernel is ever updated**, rebuild the driver:
+
 ```bash
 cd /tmp/aic8800d80-bt/drivers/aic8800
 make clean && make
