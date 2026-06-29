@@ -1,5 +1,5 @@
 # 1) Initialize Waydroid
-sudo waydroid init
+sudo waydroid init -s GAPPS
 
 # 2) Set the correct DRM device for RK3588 / Panthor
 sudo cp /var/lib/waydroid/waydroid.cfg /var/lib/waydroid/waydroid.cfg.bak.$(date +%F-%H%M%S)
